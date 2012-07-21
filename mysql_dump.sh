@@ -51,7 +51,7 @@ backup_mysql_rsnapshot() {
 		#local FILE="${BAKRSNROOT}${db}.${tTime}.gz"
 		local FILE="${db}.${tTime}.gz"
 		[ $VERBOSE -eq 1 ] && echo -n "$db.."
-		${MYSQLDUMP} -u ${MUSER} -h ${MHOST} -p${MPASS} --protocol=tcp $db | ${GZIP} -9 > $FILE
+		${MYSQLDUMP} -u ${MUSER} -h ${MHOST} -p${MPASS} --protocol=tcp --routines --triggers $db | ${GZIP} -9 > $FILE
 	done
 	[ $VERBOSE -eq 1 ] && echo ""
 	[ $VERBOSE -eq 1 ] && echo "*** Backup done [ files wrote to $BAKRSNROOT] ***"
