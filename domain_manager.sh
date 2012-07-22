@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Essential variables
+# Default variables
 www_root=/var/www
 
 usage () {
@@ -50,28 +50,6 @@ AUTHOR
 	Òscar Casajuana <elboletaire@underave.net>
 END_OF_USAGE
 }
-
-while getopts ":a:r:h::w::p::u:fvi?" opt; do
-	case $opt in
-		a)	if [ $action ]; then echo "You can't specify both remove (-r) and add (-a) options" && exit; fi
-			if [ $OPTARG ]; then fqdn=$OPTARG; fi
-			action="add"
-		;;
-		r)	if [ $action ]; then echo "You can't specify both remove (-r) and add (-a) options" && exit; fi
-			if [ $OPTARG ]; then fqdn=$OPTARG; fi
-			action="remove"
-		;;
-		f) force=true; ;;
-		h) homedir=$OPTARG ;;
-		i) interactive=true; ;;
-		p) password=$OPTARG ;;
-		u) username=$OPTARG ;;
-		v) verbose=true ;;
-		w) www_root=$OPTARG ;;
-		?) usage && exit; ;;
-		:) echo "You must specify an argument for -$OPTARG option" && exit ;;
-	esac
-done
 
 set_vars () {
 	if [ $interactive ]; then
@@ -283,6 +261,28 @@ reload_daemons () {
 }
 
 # main
+
+while getopts ":a:r:h::w::p::u:fvi?" opt; do
+	case $opt in
+		a)	if [ $action ]; then echo "You can't specify both remove (-r) and add (-a) options" && exit; fi
+			if [ $OPTARG ]; then fqdn=$OPTARG; fi
+			action="add"
+		;;
+		r)	if [ $action ]; then echo "You can't specify both remove (-r) and add (-a) options" && exit; fi
+			if [ $OPTARG ]; then fqdn=$OPTARG; fi
+			action="remove"
+		;;
+		f) force=true; ;;
+		h) homedir=$OPTARG ;;
+		i) interactive=true; ;;
+		p) password=$OPTARG ;;
+		u) username=$OPTARG ;;
+		v) verbose=true ;;
+		w) www_root=$OPTARG ;;
+		?) usage && exit; ;;
+		:) echo "You must specify an argument for -$OPTARG option" && exit ;;
+	esac
+done
 
 set_vars
 init

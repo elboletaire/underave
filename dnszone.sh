@@ -14,6 +14,47 @@ zones_folder=/var/cache/bind
 service_name=bind9
 
 
+usage () {
+	cat <<END_OF_USAGE
+NAME
+	$0 - Adds and removes DNS zones easily 
+
+SYNOPSIS
+	$0 [OPTION] [VALUE]
+	$0 [OPTION] [OPTION] [VALUE] [VALUE] ...
+
+DESCRIPTION
+	If no params are specified, process will interactive
+
+	-a|--add	Add a domain
+	-f|--force	Force creation of domain (replaces existing files instead of skipping them)
+	-m|--master	Create a zone in a master server
+	-r|--remove	Remove a domain
+	-s|--slave	Create a zone in a slave server
+	-v|--verbose	Enable verbose
+	-?|--help	Show this text
+
+EXAMPLES
+	Add a domain into a master server
+		$0 -a -m domain.ext ip.to.your.host
+
+	Add a domain into a slave server
+		$0 -a -s domain.ext ip.to.your.host
+
+	Add a domain into a master server forcing save (will replace existing files)
+		$0 -a -m -f domain.ext ip.to.your.host
+
+	Remove a domain
+		$0 -r domain.ext
+
+	Remove a domain with force (will delete the zone file too)
+		$0 -r -f domain.ext
+
+AUTHOR
+	Òscar Casajuana <elboletaire@underave.net>
+END_OF_USAGE
+}
+
 named_block () {
 	cat <<EOZONE
 
@@ -122,47 +163,6 @@ delete_zone () {
 
 reload_service () {
 	service $service_name reload
-}
-
-usage () {
-	cat <<END_OF_USAGE
-NAME
-	$0 - Adds and removes DNS zones easily 
-
-SYNOPSIS
-	$0 [OPTION] [VALUE]
-	$0 [OPTION] [OPTION] [VALUE] [VALUE] ...
-
-DESCRIPTION
-	If no params are specified, process will interactive
-
-	-a|--add	Add a domain
-	-f|--force	Force creation of domain (replaces existing files instead of skipping them)
-	-m|--master	Create a zone in a master server
-	-r|--remove	Remove a domain
-	-s|--slave	Create a zone in a slave server
-	-v|--verbose	Enable verbose
-	-?|--help	Show this text
-
-EXAMPLES
-	Add a domain into a master server
-		$0 -a -m domain.ext ip.to.your.host
-
-	Add a domain into a slave server
-		$0 -a -s domain.ext ip.to.your.host
-
-	Add a domain into a master server forcing save (will replace existing files)
-		$0 -a -m -f domain.ext ip.to.your.host
-
-	Remove a domain
-		$0 -r domain.ext
-
-	Remove a domain with force (will delete the zone file too)
-		$0 -r -f domain.ext
-
-AUTHOR
-	Òscar Casajuana <elboletaire@underave.net>
-END_OF_USAGE
 }
 
 verbose () {
