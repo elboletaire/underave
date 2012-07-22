@@ -14,9 +14,7 @@ zones_folder=/var/cache/bind
 service_name=bind9
 
 
-
 named_block () {
-	verbose "Writing zone block in $named_conf_file"
 	cat <<EOZONE
 
 zone "${domain}" in {
@@ -42,7 +40,6 @@ EOZONE
 }
 
 zone_file () {
-	verbose "Writing zone file $domain in $zones_folder"
 	cat <<EOZONE
 \$ORIGIN ${domain}.
 \$TTL	3h
@@ -77,6 +74,7 @@ EOZONE
 }
 
 backup_named () {
+	verbose "Backing up $named_conf_file to ${named_conf_file}.bak"
 	if [ ! $backed_up ]; then
 		# backup copy of named.conf file
 		cp $named_conf_file $named_conf_file.bak
@@ -93,8 +91,10 @@ create_zone () {
 			exit
 		fi
 	fi
+	verbose "Writing zone file $domain in $zones_folder"
 	zone_file | tee $zones_folder/$domain > /dev/null
 	backup_named
+	verbose "Writing zone block in $named_conf_file"
 	named_block | tee -a $named_conf_file > /dev/null
 }
 
@@ -110,19 +110,18 @@ config_block_exists () {
 delete_zone () {
 	if [[ ! $force && $(config_block_exists) = false ]]; then
 		verbose "Config block in $named_conf_file does not exist. Terminating.." && exit
-	else
-		if [[ $(config_block_exists) = true && $force ]]; then
-			verbose "Found existing zone, removing.."
-			delete_zone
-		fi
 	fi
 	backup_named
-	# remove zone from named.conf file
+	verbose "Removing zone from $named_conf_file file"
 	cat $named_conf_file | awk -v s=${domain} 'BEGIN{RS=""; s="zone \""s"\""} $0!~s{print $0"\n"}' > ${named_conf_file}.new
 	# I don't know why can't I write directly to the file 
 	mv ${named_conf_file}.new $named_conf_file
 	# remove zone file from system only if in force mode
-	[ $force ] && rm $zones_folder/$domain
+	[ $force ] && verbose "Removing zone $domain from $zones_folder" && rm $zones_folder/$domain
+}
+
+reload_service () {
+	service $service_name reload
 }
 
 usage () {
@@ -159,7 +158,7 @@ EXAMPLES
 		$0 -r domain.ext
 
 	Remove a domain with force (will delete the zone file too)
-		$0 -r domain.ext -u username
+		$0 -r -f domain.ext
 
 AUTHOR
 	Òscar Casajuana <elboletaire@underave.net>
@@ -223,6 +222,8 @@ else
 	domain=$1
 	delete_zone
 fi
+
+reload_service
 
 echo 'Done :)'
 
