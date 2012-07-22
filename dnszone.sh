@@ -27,10 +27,10 @@ DESCRIPTION
 	If no params are specified, process will interactive
 
 	-a|--add	Add a domain
+	-c|--cache	Sets zone as a cache server, specifiing \$masters ips
 	-f|--force	Force creation of domain (replaces existing files instead of skipping them)
-	-m|--master	Create a zone in a master server
+	-m|--master	Sets zone as a master server, specifiing \$allow_transfer ips
 	-r|--remove	Remove a domain
-	-s|--slave	Create a zone in a slave server
 	-v|--verbose	Enable verbose
 	-?|--help	Show this text
 
@@ -38,7 +38,7 @@ EXAMPLES
 	Add a domain into a master server
 		$0 -a -m domain.ext ip.to.your.host
 
-	Add a domain into a slave server
+	Add a domain into a cache server
 		$0 -a -s domain.ext ip.to.your.host
 
 	Add a domain into a master server forcing save (will replace existing files)
@@ -63,21 +63,21 @@ zone "${domain}" in {
 	file "${domain}";
 EOZONE
 
-	if [[ $server_type = 'master' ]]; then
+	if [[ $server_type = 'master' && $allow_transfer ]]; then
 		echo "	allow-transfer {"
 		for (( i = 0; i < ${#allow_transfer[@]}; i++ )); do
 			echo "		${allow_transfer[$i]};"
 		done
 	else
-		echo "	masters {"
-		for (( i = 0; i < ${#masters[@]}; i++ )); do
-			echo "		${masters[$i]};"
-		done
+		if [[ $server_type = 'cache' && $masters ]]; then
+			echo "	masters {"
+			for (( i = 0; i < ${#masters[@]}; i++ )); do
+				echo "		${masters[$i]};"
+			done
+		fi
 	fi
-		cat <<EOZONE
-	};
-};
-EOZONE
+	[[ $allow_transfer || $servers ]] && echo "	};"
+	echo "};"
 }
 
 zone_file () {
@@ -158,7 +158,7 @@ delete_zone () {
 	# I don't know why can't I write directly to the file 
 	mv ${named_conf_file}.new $named_conf_file
 	# remove zone file from system only if in force mode
-	[ $force ] && verbose "Removing zone $domain from $zones_folder" && rm $zones_folder/$domain
+	[ $force ] && verbose "Removing zone file $domain from $zones_folder" && rm $zones_folder/$domain
 }
 
 reload_service () {
@@ -173,7 +173,7 @@ verbose () {
 
 ## init ##
 
-TEMP=`getopt -o armshfv -l add,remove,master,slave,force,verbose -n $0 -- "$@"`
+TEMP=`getopt -o armchfv -l add,remove,master,cache,force,verbose -n $0 -- "$@"`
 if [ $? != 0 ] ; then verbose "Terminating..." >&2 ; exit 1 ; fi
 
 eval set -- "$TEMP"
@@ -190,11 +190,13 @@ while true ; do
 			shift
 		;;
 		-m|--master)
+			[ $server_type ] && echo "You cannot specify both cache and master server types" && exit
 			server_type="master"
 			shift
 		;;
-		-s|--slave)
-			server_type="slave"
+		-c|--cache)
+			[ $server_type ] && echo "You cannot specify both cache and master server types" && exit
+			server_type="cache"
 			shift
 		;;
 		-f|--force)
@@ -212,8 +214,12 @@ if [[ ! $action  ]]; then
 	usage && exit
 fi
 
+if [[ ! $server_type ]]; then
+	server_type='master'
+fi
+
 if [ $action = 'add' ]; then
-	if [ ! $server_type ] || [ ! $# -eq 2 ]; then usage && exit; fi
+	if [ ! $# -eq 2 ]; then usage && exit; fi
 	domain=$1
 	domain_ip=$2
 	create_zone
