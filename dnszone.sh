@@ -36,10 +36,10 @@ DESCRIPTION
 
 EXAMPLES
 	Add a domain into a master server
-		$0 -a -m domain.ext ip.to.your.host
+		$0 -a domain.ext ip.to.your.host
 
 	Add a domain into a cache server
-		$0 -a -s domain.ext ip.to.your.host
+		$0 -a -c domain.ext ip.to.your.host
 
 	Add a domain into a master server forcing save (will replace existing files)
 		$0 -a -m -f domain.ext ip.to.your.host
