@@ -143,7 +143,6 @@ init () {
 	case $action in
 
 		"add")
-			set_vars $2
 			verbose "+ Creating user.."
 			create_user
 			verbose "++ Creating folders.."
@@ -157,7 +156,6 @@ init () {
 		;;
 
 		"remove")
-			set_vars $2
 			echo "Are you sure that you wanna remove $username?? This really can't be undone!!!! [yes|no]"
 			read yesno
 			while [ $yesno != "no" ] && [ $yesno != "yes" ]; do
@@ -185,7 +183,7 @@ init () {
 
 create_folders () {
 
-	if test -d $homedir; then
+	if [ -d $homedir ] && [ ! $force ]; then
 		verbose "Homedir $homedir exists, skipping.."
 		return
 	fi
@@ -201,16 +199,23 @@ remove_folders () {
 }
 
 create_user () {
-	egrep -i "^$username" /etc/passwd > /dev/null
-	if [ $? -eq 0 ]; then
+	if [ $(check_user_exists) = true ]; then
 		verbose "User $username exists, skipping.."
 		return
 	fi
 	useradd $username -p $password -d $homedir
 }
 
+check_user_exists () {
+	egrep -i "^$username" /etc/passwd > /dev/null
+	[ $? -eq 0 ] && echo true || echo false
+}
+
 remove_user () {
-	userdel $username
+	if [ $(check_user_exists) = true ]; then
+		verbose "User exists. Skipping.."
+	fi
+	[ $force ] && userdel -fr $username || userdel $username
 }
 
 # set permissions
@@ -269,14 +274,12 @@ create_virtual_host () {
 }
 
 remove_virtualhost () {
-	a2dissite $fqdn
-	rm -frv /etc/apache2/sites-available/$fqdn
-
+	verbose $(a2dissite $fqdn)
+	verbose $(rm -frv /etc/apache2/sites-available/$fqdn)
 }
 
 reload_daemons () {
 	service apache2 reload
-	#service bind9 reload
 }
 
 # main
