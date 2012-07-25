@@ -7,7 +7,6 @@ fi
 
 # Default variables
 www_root=/var/www
-usergroup="clients"
 
 usage () {
 	cat <<END_OF_USAGE
@@ -129,7 +128,7 @@ init () {
 		;;
 
 		"remove")
-			echo "Are you sure that you wanna remove $username?? This really can't be undone!!!! [yes|no]"
+			echo "Are you sure that you wanna remove user $username and its dir $homedir?? This really can't be undone!!!! [yes|no]"
 			read yesno
 			while [ $yesno != "no" ] && [ $yesno != "yes" ]; do
 				echo "Please, write \"yes\" or \"no\""
@@ -160,10 +159,10 @@ create_folders () {
 		verbose "Homedir $homedir exists, skipping.."
 		return
 	fi
-
 	# folders and aliases..
-	mkdir -m 1750 -p $homedir/www
-	ln -s $homedir/www $homedir/public_html
+	verbose $(mkdir -m 1750 -p $homedir/www)
+	verbose $(ln -s $homedir/www $homedir/public_html)
+	# "it works" file
 	echo '<!DOCTYPE html><html><body><h1>It works, bitches</h1></body></html>' > $homedir/www/index.html
 }
 
@@ -171,7 +170,7 @@ remove_folders () {
 	if [ ! $force ]; then
 		verbose $(rm -v $homedir)
 	else
-		if [ "$(ls -A $homedir)" ]; then
+		if [[ -d $homedir && "$(ls -A $homedir)" ]]; then
 			echo "The $homedir directory is not empty. Are you sure to remove $homedir and all it's contents?? [yes/no]"
 			read yesno
 			while [ $yesno != "no" ] && [ $yesno != "yes" ]; do
@@ -185,17 +184,18 @@ remove_folders () {
 				exit
 			fi
 		else
-			verbose $(rm -rv $homedir)
+			[ -d $homedir ] && verbose $(rm -rv $homedir)
 		fi
 	fi
 }
+
 
 create_user () {
 	if [ $(check_user_exists) = true ]; then
 		verbose "User $username exists, skipping.."
 		return
 	fi
-	useradd $username -p $password -d $homedir
+	verbose $(useradd $username -p $password -d $homedir)
 }
 
 check_user_exists () {
@@ -207,13 +207,14 @@ remove_user () {
 	if [ $(check_user_exists) = true ]; then
 		verbose "User exists. Removing.."
 	fi
-	[ $force ] && userdel -fr $username || userdel $username
+	[ $force ] && verbose $(userdel -fr $username) || $(userdel $username)
 }
 
 # set permissions
 set_permissions () {
-	chown -R $username:$usergroup $homedir
-	chmod -R 1755 $homedir/www
+	[ ! $usergroup ] && usergroup=$username
+	verbose $(chown -R $username:$usergroup $homedir)
+	verbose $(chmod -R 1755 $homedir/www)
 }
 
 create_virtual_host () {
@@ -273,14 +274,14 @@ remove_virtualhost () {
 
 htpasswd_add () {
 	if [ ! -f $homedir/.htpasswd ]; then
-		htpasswd -b -c $homedir/.htpasswd $username $password
+		verbose $(htpasswd -b -c $homedir/.htpasswd $username $password)
 	else
-		htpasswd -b $homedir/.htpasswd $username $password
+		verbose $(htpasswd -b $homedir/.htpasswd $username $password)
 	fi
 }
 
 reload_daemons () {
-	service apache2 reload
+	verbose $(service apache2 reload)
 }
 
 # main
