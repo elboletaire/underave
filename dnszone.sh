@@ -32,7 +32,7 @@ DESCRIPTION
 	-m|--master	Sets zone as a master server, specifiing \$allow_transfer ips
 	-r|--remove	Remove a domain
 	-v|--verbose	Enable verbose
-	-?|--help	Show this text
+	-h|--help	Show this text
 
 EXAMPLES
 	Add a domain into a master server

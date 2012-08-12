@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# TODO: afegir usuari mysql i crear base de dades buida donant permisos a l'usuari creat.
+# TODO: assegurar-se que l'usuari pot accedir al phpmyadmin sense rebre errors 
+# TODO: plantejar-se si afegir una redirecció o un subdomini que porti al phpmyadmin
+
 if [ $(id -u) != "0" ]; then
 	echo "You must be root"
 	exit 1
@@ -7,6 +11,7 @@ fi
 
 # Default variables
 www_root=/var/www
+usergroup=www-data
 
 usage () {
 	cat <<END_OF_USAGE
@@ -70,7 +75,6 @@ set_vars () {
 			read fqdn
 		fi
 		if [ ! $username ]; then
-			echo $(generate_username)
 			username=$(generate_username)
 			echo -n "Enter username [$username]: "
 			read uname
@@ -115,14 +119,14 @@ init () {
 		"add")
 			verbose "+ Creating user.."
 			create_user
-			verbose "++ Creating folders.."
-			create_folders
+			verbose "++ Creating folders & data.."
+			create_data
 			verbose "+++ Creating virtual host.."
 			create_virtual_host
-			verbose "++++ Setting permissions"
-			set_permissions
-			verbose "+++++ Creating htpasswd file"
+			verbose "++++ Creating htpasswd file"
 			htpasswd_add
+			verbose "+++++ Setting permissions"
+			set_permissions
 			verbose "++++++ Reloading daemons"
 			reload_daemons
 		;;
@@ -138,7 +142,7 @@ init () {
 				verbose "+ Removing user.."
 				remove_user
 				verbose "++ Removing folders and contents.."
-				remove_folders
+				remove_data
 				verbose "+++ Removing virtual host.."
 				remove_virtualhost
 				verbose "++++ Reloading daemons"
@@ -153,49 +157,32 @@ init () {
 	echo "Done :)"
 }
 
-create_folders () {
-
+create_data () {
 	if [ -d $homedir ] && [ ! $force ]; then
 		verbose "Homedir $homedir exists, skipping.."
 		return
 	fi
 	# folders and aliases..
-	verbose $(mkdir -m 1750 -p $homedir/www)
-	verbose $(ln -s $homedir/www $homedir/public_html)
+	verbose "Creating folders and default content.."
+	mkdir -m 1750 -p $homedir/www
+	ln -s $homedir/www $homedir/public_html
 	# "it works" file
 	echo '<!DOCTYPE html><html><body><h1>It works, bitches</h1></body></html>' > $homedir/www/index.html
+	verbose "Creating mysql schema.."
+	mysql -e "CREATE SCHEMA $username;"
 }
-
-remove_folders () {
-	if [ ! $force ]; then
-		verbose $(rm -v $homedir)
-	else
-		if [[ -d $homedir && "$(ls -A $homedir)" ]]; then
-			echo "The $homedir directory is not empty. Are you sure to remove $homedir and all it's contents?? [yes/no]"
-			read yesno
-			while [ $yesno != "no" ] && [ $yesno != "yes" ]; do
-				echo "Please, write \"yes\" or \"no\""
-				read yesno
-			done
-			if [[ $yesno = 'yes' || $yesno = 'no' ]]; then
-				verbose $(rm -rv $homedir)
-			else
-				echo "Terminating..."
-				exit
-			fi
-		else
-			[ -d $homedir ] && verbose $(rm -rv $homedir)
-		fi
-	fi
-}
-
 
 create_user () {
 	if [ $(check_user_exists) = true ]; then
 		verbose "User $username exists, skipping.."
 		return
 	fi
-	verbose $(useradd $username -p $password -d $homedir)
+	verbose "Creating system user.."
+	useradd $username -p $password -d $homedir -s /bin/bash
+	verbose "Creating mysql user.."
+	mysql -e "GRANT ALL PRIVILEGES ON $username.* TO $username@'localhost' IDENTIFIED BY '$password';"
+	mysql -e "GRANT ALL PRIVILEGES ON $username.* TO $username@'ns1.wonky.es' IDENTIFIED BY '$password';"
+	mysql -e "GRANT SELECT, INSERT, UPDATE, DELETE ON phpmyadmin.* TO $username@'ns1.wonky.es';
 }
 
 check_user_exists () {
@@ -204,17 +191,28 @@ check_user_exists () {
 }
 
 remove_user () {
-	if [ $(check_user_exists) = true ]; then
-		verbose "User exists. Removing.."
+	verbose "Removing system user.."
+	[ $force ] && userdel -f $username || userdel $username
+	verbose "Removing mysql user.."
+	mysql -e "DROP USER $username@'localhost';"
+	mysql -e "DROP USER $username@'ns1.wonky.es';"
+}
+
+remove_data () {
+	# remove schema..
+	[ $force ] && mysql -e "DROP SCHEMA $username;"
+	# remove folders..
+	if [ ! $force ]; then
+		[ $verbose ] && rm -v $homedir || rm $homedir
+	else
+		[ $verbose ] && rm -rv $homedir || rm -r $homedir
 	fi
-	[ $force ] && verbose $(userdel -fr $username) || $(userdel $username)
 }
 
 # set permissions
 set_permissions () {
-	[ ! $usergroup ] && usergroup=$username
-	verbose $(chown -R $username:$usergroup $homedir)
-	verbose $(chmod -R 1755 $homedir/www)
+	chown -R $username:$usergroup $homedir
+	chmod -R 1775 $homedir/www
 }
 
 create_virtual_host () {
@@ -264,24 +262,24 @@ create_virtual_host () {
 		CustomLog ${APACHE_LOG_DIR}/$username-access.log combined
 </VirtualHost>" > /etc/apache2/sites-available/$fqdn
 
-	verbose $(a2ensite $fqdn)
+	a2ensite $fqdn
 }
 
 remove_virtualhost () {
-	verbose $(a2dissite $fqdn)
-	verbose $(rm -v /etc/apache2/sites-available/$fqdn)
+	a2dissite $fqdn
+	rm -v /etc/apache2/sites-available/$fqdn
 }
 
 htpasswd_add () {
 	if [ ! -f $homedir/.htpasswd ]; then
-		verbose $(htpasswd -b -c $homedir/.htpasswd $username $password)
+		htpasswd -b -c $homedir/.htpasswd $username $password
 	else
-		verbose $(htpasswd -b $homedir/.htpasswd $username $password)
+		htpasswd -b $homedir/.htpasswd $username $password
 	fi
 }
 
 reload_daemons () {
-	verbose $(service apache2 reload)
+	service apache2 reload
 }
 
 # main
