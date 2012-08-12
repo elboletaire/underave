@@ -223,34 +223,34 @@ create_virtual_host () {
 
 		DocumentRoot $homedir/www/
 		<Directory />
-				Options FollowSymLinks
-				AllowOverride none
+			Options FollowSymLinks
+			AllowOverride none
 		</Directory>
 		<Directory $homedir/www/>
-				Options Indexes FollowSymLinks MultiViews
-				AllowOverride All
-				Order allow,deny
-				Allow from all
+			Options Indexes FollowSymLinks MultiViews
+			AllowOverride All
+			Order allow,deny
+			Allow from all
 
-				RewriteEngine On
+			RewriteEngine On
 
-				RewriteCond %{HTTP_HOST} ^(www\.)?(.+)$ [NC]
-				RewriteRule ^stats\/?$ /awstats/awstats.pl?config=%2 [R=301,L]
+			RewriteCond %{HTTP_HOST} ^(www\.)?(.+)$ [NC]
+			RewriteRule ^stats\/?$ /awstats/awstats.pl?config=%2 [R=301,L]
 		</Directory>
 
 		<Location /awstats>
-				AuthType Basic
-				AuthName \"awstats\"
-				AuthUserFile $homedir/.htpasswd
-				Require valid-user
+			AuthType Basic
+			AuthName \"awstats\"
+			AuthUserFile $homedir/.htpasswd
+			Require valid-user
 		</Location>
 
 		ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
 		<Directory \"/usr/lib/cgi-bin\">
-				AllowOverride None
-				Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
-				Order allow,deny
-				Allow from all
+			AllowOverride None
+			Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
+			Order allow,deny
+			Allow from all
 		</Directory>
 
 		ErrorLog ${APACHE_LOG_DIR}/$username-error.log
