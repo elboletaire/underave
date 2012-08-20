@@ -182,7 +182,7 @@ create_user () {
 	verbose "Creating mysql user.."
 	mysql -e "GRANT ALL PRIVILEGES ON $username.* TO $username@'localhost' IDENTIFIED BY '$password';"
 	mysql -e "GRANT ALL PRIVILEGES ON $username.* TO $username@'ns1.wonky.es' IDENTIFIED BY '$password';"
-	mysql -e "GRANT SELECT, INSERT, UPDATE, DELETE ON phpmyadmin.* TO $username@'ns1.wonky.es';
+	mysql -e "GRANT SELECT, INSERT, UPDATE, DELETE ON phpmyadmin.* TO $username@'ns1.wonky.es';"
 }
 
 check_user_exists () {

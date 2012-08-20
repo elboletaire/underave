@@ -1,12 +1,13 @@
 #!/bin/bash
 
-name_servers=("ns1.yourdomain.com" "ns2.yourdomain.com")
-mail_servers=("mail.yourdomain.com")
+name_servers=("ns1.wonky.es" "ns2.wonky.es")
+mail_servers=("mail.wonky.es")
+mail_server_ips=("78.46.217.166")
 mx_start_value=5
 mx_increase_value=5
 # comment this two lines to disable cache dns server
-allow_transfer=("192.168.1.3" "192.168.1.6")
-masters=("192.168.1.1")
+allow_transfer=("78.46.217.161" "176.9.142.14")
+masters=("78.46.217.166")
 
 dateformat="%y%m%d"
 named_conf_file=/etc/bind/named.conf.local
@@ -27,9 +28,9 @@ DESCRIPTION
 	If no params are specified, process will interactive
 
 	-a|--add	Add a domain
-	-c|--cache	Sets zone as a cache server, specifiing \$masters ips
+	-c|--cache|-s|--slave	Sets zone as a cache server
 	-f|--force	Force creation of domain (replaces existing files instead of skipping them)
-	-m|--master	Sets zone as a master server, specifiing \$allow_transfer ips
+	-m|--master	Sets zone as a master server
 	-r|--remove	Remove a domain
 	-v|--verbose	Enable verbose
 	-h|--help	Show this text
@@ -39,7 +40,7 @@ EXAMPLES
 		$0 -a domain.ext ip.to.your.host
 
 	Add a domain into a cache server
-		$0 -a -c domain.ext ip.to.your.host
+		$0 -a -c domain.ext
 
 	Add a domain into a master server forcing save (will replace existing files)
 		$0 -a -m -f domain.ext ip.to.your.host
@@ -69,7 +70,7 @@ EOZONE
 			echo "		${allow_transfer[$i]};"
 		done
 	else
-		if [[ $server_type = 'cache' && $masters ]]; then
+		if [[ $server_type = 'slave' && $masters ]]; then
 			echo "	masters {"
 			for (( i = 0; i < ${#masters[@]}; i++ )); do
 				echo "		${masters[$i]};"
@@ -85,7 +86,7 @@ zone_file () {
 \$ORIGIN ${domain}.
 \$TTL	3h
 @	IN	SOA	${name_servers[0]}.	elboletaire.underave.net. (
-	`date +${dateformat}`00  ; se = serial number
+	`date +${dateformat}`00    ; se = serial number
 	3h          ; ref = refresh
 	15m         ; ret = update retry
 	3w          ; ex = expiry
@@ -102,10 +103,13 @@ EOZONE
 		echo "@			IN		MX	${mx_start_value}	${mail_servers[$i]}."
 		mx_start_value=$(($mx_start_value+$mx_increase_value))
 	done
+	for (( i = 0; i < ${#mail_server_ips[@]}; i++ )); do
+		echo "@			IN		TXT		\"v=spf1 +a +mx +ip4:${mail_server_ips[$i]} -all\""
+	done
 	cat <<EOZONE
 
 ; Nodes in domain
-@			IN		A		${domain_ip}.
+@			IN		A		${domain_ip}
 
 ; Aliases
 www			IN		CNAME		@
@@ -132,8 +136,10 @@ create_zone () {
 			exit
 		fi
 	fi
-	verbose "Writing zone file $domain in $zones_folder"
-	zone_file | tee $zones_folder/$domain > /dev/null
+	if [ $server_type = 'master' ]; then
+		verbose "Writing zone file $domain in $zones_folder"
+		zone_file | tee $zones_folder/$domain > /dev/null
+	fi
 	backup_named
 	verbose "Writing zone block in $named_conf_file"
 	named_block | tee -a $named_conf_file > /dev/null
@@ -155,10 +161,11 @@ delete_zone () {
 	backup_named
 	verbose "Removing zone from $named_conf_file file"
 	cat $named_conf_file | awk -v s=${domain} 'BEGIN{RS=""; s="zone \""s"\""} $0!~s{print $0"\n"}' > ${named_conf_file}.new
-	# I don't know why can't I write directly to the file 
 	mv ${named_conf_file}.new $named_conf_file
 	# remove zone file from system only if in force mode
-	[ $force ] && verbose "Removing zone file $domain from $zones_folder" && rm $zones_folder/$domain
+	if [[ $server_type = 'master' ]]; then
+		[ $force ] && verbose "Removing zone file $domain from $zones_folder" && rm $zones_folder/$domain
+	fi
 }
 
 reload_service () {
@@ -194,9 +201,9 @@ while true ; do
 			server_type="master"
 			shift
 		;;
-		-c|--cache)
+		-c|-s|--cache|--slave)
 			[ $server_type ] && echo "You cannot specify both cache and master server types" && exit
-			server_type="cache"
+			server_type="slave"
 			shift
 		;;
 		-f|--force)
@@ -219,9 +226,17 @@ if [[ ! $server_type ]]; then
 fi
 
 if [ $action = 'add' ]; then
-	if [ ! $# -eq 2 ]; then usage && exit; fi
+	if [[ ! $# -eq 2 && $server_type = 'master' ]]; then
+		usage && exit
+	else
+		if [[ ! $# -eq 1 && $server_type = 'slave' ]]; then
+			usage && exit
+		fi
+	fi
 	domain=$1
-	domain_ip=$2
+	if [[ $server_type = 'master' ]]; then
+		domain_ip=$2
+	fi
 	create_zone
 else
 	[ ! $# -eq 1 ] && usage && exit
