@@ -90,17 +90,6 @@ var infos = {
 		"split": "i=",
 		"external": true
 	},
-	"megavideo": {
-		"size": [560, 340],
-		"embed": "http://www.megavideo.com/v/#CODE#23904dc5fcfd0a6bebf48b4a96d98502",
-		"footer": "<br /><a href=\"http://www.megavideo.com/?v=#CODE#\" target=\"_blank\">Veure'l a MegaVideo</a><br />",
-		"flashvars": {
-			"wmode": "transparent"
-		},
-		"url": "http:\/\/(www\.)?megavideo\.com\/",
-		"split": "v=",
-		"external": true
-	},
 	"metacafe" : {
 		"size" : [560, 340],
 		"embed" : "http://www.metacafe.com/fplayer/#CODE#.swf",
@@ -121,7 +110,24 @@ var infos = {
 		},
 		"url": "http:\/\/(www\.)?soundcloud\.com\/",
 		"split": "/",
-		"external": false
+		"external": false,
+		"artist_split": 2,
+		"track_split": 1
+	},
+	"mixcloud" : {
+		"size": [480, 250],
+		"embed": "http://www.mixcloud.com/media/swf/player/mixcloudLoader.swf?feed=#CODE#",
+		"footer": "<br /><span><a href=\"#CODE#\" target=\"_blank\">#TRACK#</a> by <a href=\"#ARTIST_URL#\" target=\"_blank\">#ARTIST#</a></span><br />",
+		"flashvars": {
+			"allowFullScreen": true,
+			"wmode": "opaque",
+			"allowscriptaccess": "always"
+		},
+		"url": "https?:\/\/(www\.)?mixcloud\.com\/",
+		"split" : "/",
+		"external": false,
+		"artist_split": 3,
+		"track_split": 2
 	},
 	"veoh" : {
 		"size": [560, 340],
@@ -206,10 +212,10 @@ function embedMedia(url) {
 						}
 					});
 				} else {
-					// soundcloud
-					var artist = code.split("/")[code.split("/").length - 2].replace(/-/ig," ").ucwords();
-					var track = code.split("/")[code.split("/").length - 1].replace(/-/ig," ").ucwords();
-					var artist_url = code.replace(code.split("/")[code.split("/").length - 1], "");
+					// soundcloud && mixcloud
+					var artist = code.split("/")[code.split("/").length - el.artist_split].replace(/-/ig," ").ucwords();
+					var track = code.split("/")[code.split("/").length - el.track_split].replace(/-/ig," ").ucwords();
+					var artist_url = code.replace(code.split("/")[code.split("/").length - el.track_split], "").replace(/\/$/, '');
 					footer = footer
 						.replace(/#TRACK#/ig, track)
 						.replace(/#ARTIST_URL#/ig, artist_url)
