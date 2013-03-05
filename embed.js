@@ -1,7 +1,7 @@
 /**
  *
  * @author Òscar Casajuana Alonso <elboletaire@underave.net>
- * @version 1.3
+ * @version 1.4
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
