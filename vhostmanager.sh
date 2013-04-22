@@ -11,7 +11,6 @@ fi
 
 # Default variables
 www_root=/var/www
-usergroup=www-data
 
 usage () {
 	cat <<END_OF_USAGE
@@ -23,7 +22,7 @@ SYNOPSIS
 	$0 [OPTION] [VALUE] ...
 
 DESCRIPTION
-	If no params are specified, process will interactive
+	If no params are specified, process will be interactive
 
 	-a	Add a domain
 	-f	Force creation of domain (replaces existing files instead of skipping them)
@@ -80,6 +79,12 @@ set_vars () {
 			read uname
 			if [ $uname ]; then username=$uname; fi
 		fi
+		if [ ! $usergroup ]; then
+			usergroup=$username
+			echo -n "Enter usergroup [$username]: "
+			read gname
+			if [ $gname ]; then usergroup=$gname; fi
+		fi
 		if [ ! $homedir ]; then
 			homedir=$www_root/$username
 			echo -n "Enter home dir [$homedir]: "
@@ -89,6 +94,7 @@ set_vars () {
 	else
 		if [ ! $action ] || [ ! $fqdn ]; then usage;exit 1; fi
 		if [ ! $username ]; then username=$(generate_username); fi
+		if [ ! $usergroup ]; then usergroup=$username; fi
 		if [ ! $homedir ]; then homedir=$www_root/$username; fi
 	fi
 	# set user password
@@ -119,12 +125,9 @@ init () {
 		"add")
 			create_user
 			create_data
-			create_virtual_host
-			htpasswd_add
-			create_awstats_file
 			set_permissions
 			reload_daemons
-			create_cron
+			create_crons
 		;;
 
 		"remove")
@@ -156,6 +159,7 @@ create_data () {
 	fi
 	# folders and aliases..
 	create_folders
+
 	verbose "Symlinking www to public_html..."
 	ln -s $homedir/www $homedir/public_html
 	# "it works" file
@@ -163,14 +167,20 @@ create_data () {
 	echo '<!DOCTYPE html><html><body><h1>It works, bitches</h1></body></html>' > $homedir/www/index.html
 	verbose "Creating mysql schema..."
 	mysql -e "CREATE SCHEMA IF NOT EXISTS $username;"
+
+	create_php_fcgi_wrapper
+	create_virtual_host
+	htpasswd_add
+	create_awstats_file
 }
 
 create_folders () {
 	verbose "Creating folders..."
-	mkdir -m 1750 -p $homedir/www
-	mkdir -m 1750 -p $homedir/tmp/awstats/conf
-	mkdir -m 1750 -p $homedir/tmp/awstats/lib
-	mkdir -m 1750 -p $homedir/tmp/log
+	mkdir -p $homedir/www
+	mkdir -p $homedir/conf/awstats
+	mkdir -p $homedir/var/awstats/lib
+	mkdir $homedir/var/log
+	mkdir $homedir/bin
 }
 
 create_awstats_file () {
@@ -178,16 +188,16 @@ create_awstats_file () {
 	echo "# BASIC AWSTATS CONFIGURATION
 Include \"/etc/awstats/awstats.conf.local\"
 
-LogFile=\"$homedir/tmp/log/$username-access.log\"
+LogFile=\"$homedir/var/log/$username-access.log\"
 
 SiteDomain=\"www.$fqdn\"
 
 # Example: \"www.myserver.com localhost 127.0.0.1 REGEX[mydomain\.(net|org)\$]\"
 HostAliases=\"localhost 127.0.0.1 $fqdn www.$fqdn\"
 
-DirData=\"$homedir/tmp/awstats/lib/\"
+DirData=\"$homedir/var/awstats/\"
 
-AllowAccessFromWebToFollowingAuthenticatedUsers=\"elboletaire $username\"" > $homedir/tmp/awstats/conf/awstats.$fqdn.conf
+AllowAccessFromWebToFollowingAuthenticatedUsers=\"elboletaire $username\"" > $homedir/conf/awstats/awstats.$fqdn.conf
 }
 
 create_user () {
@@ -231,7 +241,7 @@ remove_data () {
 set_permissions () {
 	verbose "Setting user permissions..."
 	chown -R $username:$usergroup $homedir
-	chmod -R 1775 $homedir/www
+	chmod +x $homedir/bin/php.fcgi
 }
 
 create_virtual_host () {
@@ -239,32 +249,14 @@ create_virtual_host () {
 	echo "
 <VirtualHost *:80>
 	ServerAdmin elboletaire@underave.net
-	ServerName panel.$fqdn
-
-	DocumentRoot /var/www/panel/
-
-	<Directory /var/www/panel/>
-		Options FollowSymLinks
-		AllowOverride all
-
-		RewriteEngine On
-		RewriteRule ^stats\/?$ /awstats/awstats.pl?configdir=$homedir/tmp/awstats/conf/&config=$fqdn [R=301,L]
-	</Directory>
-
-	 <Location />
-		AuthType Basic
-		AuthName \"$fqdn control panel\"
-		AuthUserFile $homedir/.htpasswd
-		Require valid-user
-		SetEnv AWSTATS_ENABLE_CONFIG_DIR 1
-	</Location>
-</VirtualHost>
-<VirtualHost *:80>
-	ServerAdmin elboletaire@underave.net
 	ServerName $fqdn
 	ServerAlias www.$fqdn
 
 	DocumentRoot $homedir/www/
+
+	ScriptAlias /cgi-bin $homedir/bin
+	Action application/x-httpd-php /cgi-bin/php.fcgi
+	SuexecUserGroup $username $usergroup
 
 	<Directory $homedir/www/>
 		Options Indexes FollowSymLinks MultiViews
@@ -273,29 +265,32 @@ create_virtual_host () {
 		Allow from all
 	</Directory>
 
-	ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
-	<Directory \"/usr/lib/cgi-bin\">
-		AllowOverride None
-		Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
-		Order allow,deny
-		Allow from all
-	</Directory>
-
-	ErrorLog $homedir/tmp/log/$username-error.log
+	ErrorLog $homedir/var/log/$username-error.log
 
 	# Possible values include: debug, info, notice, warn, error, crit,
 	# alert, emerg.
 	LogLevel warn
 
-	CustomLog $homedir/tmp/log/$username-access.log combined
+	CustomLog $homedir/var/log/$username-access.log combined
 </VirtualHost>" > /etc/apache2/sites-available/$fqdn
 
 	a2ensite $fqdn
 }
 
-create_cron () {
-	verbose "Creating cron..."
-	echo "*/30 * * * * /usr/local/bin/awstats_updateall.pl -configdir=$homedir/tmp/awstats/conf/ -awstatsprog=/usr/lib/cgi-bin/awstats.pl now" | crontab -u $username -
+create_php_fcgi_wrapper () {
+	verbose "Creating php fcgi wrapper..."
+	echo "#!/bin/sh
+PHP_INI_SCAN_DIR=/etc/php5/cgi/conf.d
+export PHP_INI_SCAN_DIR
+export PHPRC=$homedir/conf
+export PHP_FCGI_CHILDREN=4
+export PHP_FCGI_MAX_REQUESTS=200
+exec /usr/bin/php5-cgi" > $homedir/bin/php.fcgi
+}
+
+create_crons () {
+	verbose "Creating crons..."
+	echo "*/30 * * * * /usr/local/bin/awstats_updateall.pl -configdir=$homedir/conf/awstats/ -awstatsprog=/usr/lib/cgi-bin/awstats.pl now" | crontab -u $username -
 }
 
 remove_virtualhost () {
